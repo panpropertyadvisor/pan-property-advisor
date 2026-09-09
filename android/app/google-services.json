@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "355482824296",
+    "project_id": "pan-property-advisor-v1",
+    "storage_bucket": "pan-property-advisor-v1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:355482824296:android:5a60727535def89d93d5dd",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_1pan"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBbXlE_TlMvrV4O8ZzzFfzX_8BeaizAj3s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
