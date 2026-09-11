@@ -57,6 +57,8 @@ jobs:
               <string>app-store</string>
               <key>signingStyle</key>
               <string>manual</string>
+              <key>teamID</key>
+              <string>3C9698764Z</string>
           </dict>
           </plist>
           EOF
