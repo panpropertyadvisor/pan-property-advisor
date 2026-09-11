@@ -69,16 +69,26 @@ jobs:
           </plist>
           EOF
 
-      - name: Build IPA
+      - name: Build IPA (signed)
         run: flutter build ipa --release --export-options-plist=ExportOptions.plist
 
+      - name: Install App Store Connect CLI
+        run: |
+          brew install app-store-connect
+
       - name: Upload to TestFlight
-        uses: apple-actions/app-store-connect-upload@v1
-        with:
-          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          api-private-key: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
-          app-path: build/ios/ipa/*.ipa
+        env:
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > private_key.p8
+
+          app-store-connect upload \
+            --apiKeyId "$APP_STORE_CONNECT_KEY_ID" \
+            --apiIssuerId "$APP_STORE_CONNECT_ISSUER_ID" \
+            --privateKeyPath private_key.p8 \
+            --file build/ios/ipa/*.ipa
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
