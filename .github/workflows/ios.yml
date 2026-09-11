@@ -22,7 +22,7 @@ jobs:
 
 
       # ============================================================
-      # 2. FLUTTER
+      # 2. SET UP FLUTTER
       # ============================================================
 
       - name: Set up Flutter
@@ -31,14 +31,18 @@ jobs:
           channel: stable
 
 
-      - name: Show Flutter version
+      # ============================================================
+      # 3. SHOW FLUTTER VERSION
+      # ============================================================
+
+      - name: Flutter version
         run: |
           flutter --version
           dart --version
 
 
       # ============================================================
-      # 3. DEPENDENCIES
+      # 4. INSTALL DEPENDENCIES
       # ============================================================
 
       - name: Install dependencies
@@ -47,7 +51,7 @@ jobs:
 
 
       # ============================================================
-      # 4. INSTALL APPLE CERTIFICATE
+      # 5. INSTALL APPLE CERTIFICATE AND PROFILE
       # ============================================================
 
       - name: Install Apple Certificate and Provisioning Profile
@@ -63,44 +67,34 @@ jobs:
           PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
 
-
           echo "=========================================="
           echo "DECODING APPLE SIGNING FILES"
           echo "=========================================="
-
 
           echo "$BUILD_CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
 
           echo "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode > "$PP_PATH"
 
-
-          echo ""
           echo "Certificate:"
           ls -lh "$CERTIFICATE_PATH"
 
-
-          echo ""
           echo "Provisioning profile:"
           ls -lh "$PP_PATH"
 
 
           # --------------------------------------------------------
-          # Create temporary keychain
+          # CREATE KEYCHAIN
           # --------------------------------------------------------
 
-          echo ""
           echo "Creating temporary keychain..."
-
 
           security create-keychain \
             -p "$KEYCHAIN_PASSWORD" \
             "$KEYCHAIN_PATH"
 
-
           security set-keychain-settings \
             -lut 21600 \
             "$KEYCHAIN_PATH"
-
 
           security unlock-keychain \
             -p "$KEYCHAIN_PASSWORD" \
@@ -108,12 +102,10 @@ jobs:
 
 
           # --------------------------------------------------------
-          # Import certificate
+          # IMPORT CERTIFICATE
           # --------------------------------------------------------
 
-          echo ""
-          echo "Importing Apple certificate..."
-
+          echo "Importing Apple Distribution certificate..."
 
           security import "$CERTIFICATE_PATH" \
             -k "$KEYCHAIN_PATH" \
@@ -122,7 +114,7 @@ jobs:
 
 
           # --------------------------------------------------------
-          # Allow Apple signing tools
+          # ALLOW CODESIGN
           # --------------------------------------------------------
 
           security set-key-partition-list \
@@ -133,27 +125,25 @@ jobs:
 
 
           # --------------------------------------------------------
-          # Use temporary keychain
+          # SET KEYCHAIN
           # --------------------------------------------------------
 
           security list-keychain \
             -d user \
             -s "$KEYCHAIN_PATH"
 
-
           security default-keychain \
             -s "$KEYCHAIN_PATH"
 
 
           # --------------------------------------------------------
-          # CHECK CERTIFICATE
+          # VERIFY CERTIFICATE
           # --------------------------------------------------------
 
           echo ""
           echo "=========================================="
           echo "AVAILABLE CODE SIGNING IDENTITIES"
           echo "=========================================="
-
 
           security find-identity \
             -v \
@@ -170,17 +160,15 @@ jobs:
           echo "INSTALLING PROVISIONING PROFILE"
           echo "=========================================="
 
-
           mkdir -p \
             "$HOME/Library/MobileDevice/Provisioning Profiles"
-
 
           cp "$PP_PATH" \
             "$HOME/Library/MobileDevice/Provisioning Profiles/"
 
 
           # --------------------------------------------------------
-          # READ PROFILE INFORMATION
+          # PROFILE INFORMATION
           # --------------------------------------------------------
 
           security cms \
@@ -188,43 +176,30 @@ jobs:
             -i "$PP_PATH" \
             > "$RUNNER_TEMP/profile.plist"
 
-
           echo ""
           echo "=========================================="
           echo "PROVISIONING PROFILE INFORMATION"
           echo "=========================================="
 
-
-          echo ""
           echo "Profile Name:"
-
 
           /usr/libexec/PlistBuddy \
             -c "Print :Name" \
             "$RUNNER_TEMP/profile.plist"
 
-
-          echo ""
           echo "Profile UUID:"
-
 
           /usr/libexec/PlistBuddy \
             -c "Print :UUID" \
             "$RUNNER_TEMP/profile.plist"
 
-
-          echo ""
           echo "Application Identifier:"
-
 
           /usr/libexec/PlistBuddy \
             -c "Print :Entitlements:application-identifier" \
             "$RUNNER_TEMP/profile.plist"
 
-
-          echo ""
           echo "Team Identifier:"
-
 
           /usr/libexec/PlistBuddy \
             -c "Print :TeamIdentifier" \
@@ -232,43 +207,60 @@ jobs:
 
 
       # ============================================================
-      # 5. CHECK BUNDLE ID
+      # 6. CONFIGURE XCODE PROJECT FOR CI SIGNING
       # ============================================================
 
-      - name: Check iOS Bundle Identifier
+      - name: Configure iOS signing
         run: |
 
           echo "=========================================="
-          echo "IOS BUNDLE IDENTIFIER"
+          echo "CONFIGURING IOS SIGNING"
           echo "=========================================="
 
+          echo "Bundle ID: com.panpropertyadvisor.app"
+          echo "Team ID: 3C9698764Z"
+          echo "Certificate: Apple Distribution"
+          echo "Provisioning Profile: AppStore_Profile"
+
+
+          # Set the development team
+          sed -i '' \
+            's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = 3C9698764Z;/g' \
+            ios/Runner.xcodeproj/project.pbxproj
+
+
+          # Set manual signing
+          sed -i '' \
+            's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' \
+            ios/Runner.xcodeproj/project.pbxproj
+
+
+          # Set distribution certificate
+          sed -i '' \
+            's/CODE_SIGN_IDENTITY = ".*";/CODE_SIGN_IDENTITY = "Apple Distribution";/g' \
+            ios/Runner.xcodeproj/project.pbxproj
+
+
+          # Add provisioning profile name
+          sed -i '' \
+            '/CODE_SIGN_IDENTITY = "Apple Distribution";/a\
+                PROVISIONING_PROFILE_SPECIFIER = "AppStore_Profile";' \
+            ios/Runner.xcodeproj/project.pbxproj
+
+
+          echo ""
+          echo "=========================================="
+          echo "XCODE SIGNING SETTINGS"
+          echo "=========================================="
 
           grep -n \
-            "PRODUCT_BUNDLE_IDENTIFIER" \
+            -E "DEVELOPMENT_TEAM|CODE_SIGN_STYLE|CODE_SIGN_IDENTITY|PROVISIONING_PROFILE_SPECIFIER" \
             ios/Runner.xcodeproj/project.pbxproj \
             || true
 
 
       # ============================================================
-      # 6. CHECK SIGNING SETTINGS
-      # ============================================================
-
-      - name: Check Xcode signing configuration
-        run: |
-
-          echo "=========================================="
-          echo "XCODE SIGNING CONFIGURATION"
-          echo "=========================================="
-
-
-          grep -n \
-            -E "DEVELOPMENT_TEAM|CODE_SIGN_STYLE|CODE_SIGN_IDENTITY|PROVISIONING_PROFILE" \
-            ios/Runner.xcodeproj/project.pbxproj \
-            || true
-
-
-      # ============================================================
-      # 7. CREATE EXPORTOPTIONS
+      # 7. CREATE EXPORT OPTIONS
       # ============================================================
 
       - name: Create ExportOptions.plist
@@ -297,6 +289,12 @@ jobs:
               <key>destination</key>
               <string>export</string>
 
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.panpropertyadvisor.app</key>
+                  <string>AppStore_Profile</string>
+              </dict>
+
               <key>uploadBitcode</key>
               <false/>
 
@@ -315,7 +313,6 @@ jobs:
           echo "EXPORTOPTIONS.PLIST"
           echo "=========================================="
 
-
           cat ExportOptions.plist
 
 
@@ -330,11 +327,9 @@ jobs:
           echo "BUILDING IOS IPA"
           echo "=========================================="
 
-
           flutter clean
 
           flutter pub get
-
 
           flutter build ipa \
             --release \
@@ -351,7 +346,6 @@ jobs:
           echo "=========================================="
           echo "GENERATED IPA"
           echo "=========================================="
-
 
           ls -lah build/ios/ipa/
 
@@ -370,7 +364,7 @@ jobs:
 
 
       # ============================================================
-      # 11. SAVE IPA AS GITHUB ARTIFACT
+      # 11. SAVE IPA ARTIFACT
       # ============================================================
 
       - name: Upload IPA Artifact
