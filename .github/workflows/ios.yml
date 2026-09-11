@@ -2,7 +2,9 @@ name: iOS Build & TestFlight Upload
 
 on:
   push:
-    branches: ["main"]
+    branches:
+      - main
+
   workflow_dispatch:
 
 jobs:
@@ -10,79 +12,383 @@ jobs:
     runs-on: macos-latest
 
     steps:
+
+      # ============================================================
+      # 1. CHECKOUT SOURCE CODE
+      # ============================================================
       - name: Checkout repository
         uses: actions/checkout@v4
 
+
+      # ============================================================
+      # 2. SET UP FLUTTER
+      # ============================================================
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
 
-      - name: Install dependencies
-        run: flutter pub get
 
+      # ============================================================
+      # 3. SHOW FLUTTER VERSION
+      # ============================================================
+      - name: Flutter version
+        run: |
+          flutter --version
+          dart --version
+
+
+      # ============================================================
+      # 4. INSTALL FLUTTER DEPENDENCIES
+      # ============================================================
+      - name: Install dependencies
+        run: |
+          flutter pub get
+
+
+      # ============================================================
+      # 5. INSTALL APPLE CERTIFICATE + PROVISIONING PROFILE
+      # ============================================================
       - name: Install Apple Certificate and Provisioning Profile
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
           BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+
         run: |
-          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
-          PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
-          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
 
-          echo "$BUILD_CERTIFICATE_BASE64" | base64 -d > $CERTIFICATE_PATH
-          echo "$BUILD_PROVISION_PROFILE_BASE64" | base64 -d > $PP_PATH
+          CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
+          PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
 
-          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
 
-          security import $CERTIFICATE_PATH -k $KEYCHAIN_PATH -P "$P12_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security list-keychains -s $KEYCHAIN_PATH
+          echo "=========================================="
+          echo "DECODING APPLE SIGNING FILES"
+          echo "=========================================="
 
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/
+
+          echo "$BUILD_CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+
+          echo "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode > "$PP_PATH"
+
+
+          echo ""
+          echo "Certificate file:"
+          ls -lh "$CERTIFICATE_PATH"
+
+
+          echo ""
+          echo "Provisioning profile:"
+          ls -lh "$PP_PATH"
+
+
+          # --------------------------------------------------------
+          # Create temporary keychain
+          # --------------------------------------------------------
+
+          echo ""
+          echo "=========================================="
+          echo "CREATING TEMPORARY KEYCHAIN"
+          echo "=========================================="
+
+
+          security create-keychain \
+            -p "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+
+          security set-keychain-settings \
+            -lut 21600 \
+            "$KEYCHAIN_PATH"
+
+
+          security unlock-keychain \
+            -p "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+
+          # --------------------------------------------------------
+          # Import Apple certificate
+          # --------------------------------------------------------
+
+          echo ""
+          echo "=========================================="
+          echo "IMPORTING APPLE CERTIFICATE"
+          echo "=========================================="
+
+
+          security import "$CERTIFICATE_PATH" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$P12_PASSWORD" \
+            -A
+
+
+          # --------------------------------------------------------
+          # Allow codesign / Apple tools to access certificate
+          # --------------------------------------------------------
+
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+
+          # --------------------------------------------------------
+          # Make temporary keychain available
+          # --------------------------------------------------------
+
+          security list-keychain \
+            -d user \
+            -s "$KEYCHAIN_PATH"
+
+
+          security default-keychain \
+            -s "$KEYCHAIN_PATH"
+
+
+          # --------------------------------------------------------
+          # CHECK SIGNING IDENTITIES
+          # --------------------------------------------------------
+
+          echo ""
+          echo "=========================================="
+          echo "AVAILABLE CODE SIGNING IDENTITIES"
+          echo "=========================================="
+
+
+          security find-identity \
+            -v \
+            -p codesigning \
+            "$KEYCHAIN_PATH"
+
+
+          # --------------------------------------------------------
+          # Install provisioning profile
+          # --------------------------------------------------------
+
+          echo ""
+          echo "=========================================="
+          echo "INSTALLING PROVISIONING PROFILE"
+          echo "=========================================="
+
+
+          mkdir -p \
+            "$HOME/Library/MobileDevice/Provisioning Profiles"
+
+
+          cp "$PP_PATH" \
+            "$HOME/Library/MobileDevice/Provisioning Profiles/"
+
+
+          # --------------------------------------------------------
+          # Read provisioning profile information
+          # --------------------------------------------------------
+
+          echo ""
+          echo "=========================================="
+          echo "PROVISIONING PROFILE INFORMATION"
+          echo "=========================================="
+
+
+          security cms \
+            -D \
+            -i "$PP_PATH" \
+            > "$RUNNER_TEMP/profile.plist"
+
+
+          echo ""
+          echo "Profile Name:"
+
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :Name" \
+            "$RUNNER_TEMP/profile.plist"
+
+
+          echo ""
+          echo "Profile UUID:"
+
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :UUID" \
+            "$RUNNER_TEMP/profile.plist"
+
+
+          echo ""
+          echo "Application Identifier:"
+
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :Entitlements:application-identifier" \
+            "$RUNNER_TEMP/profile.plist"
+
+
+          echo ""
+          echo "Team Identifier:"
+
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :TeamIdentifier" \
+            "$RUNNER_TEMP/profile.plist"
+
+
+      # ============================================================
+      # 6. SHOW IOS BUNDLE IDENTIFIER
+      # ============================================================
+      - name: Check iOS Bundle Identifier
+        run: |
+
+          echo "=========================================="
+          echo "IOS BUNDLE IDENTIFIER"
+          echo "=========================================="
+
+
+          grep -n \
+            "PRODUCT_BUNDLE_IDENTIFIER" \
+            ios/Runner.xcodeproj/project.pbxproj \
+            || true
+
+
+      # ============================================================
+      # 7. SHOW IOS PROJECT SIGNING SETTINGS
+      # ============================================================
+      - name: Check Xcode signing configuration
+        run: |
+
+          echo "=========================================="
+          echo "XCODE SIGNING CONFIGURATION"
+          echo "=========================================="
+
+
+          grep -n \
+            -E "DEVELOPMENT_TEAM|CODE_SIGN_STYLE|CODE_SIGN_IDENTITY|PROVISIONING_PROFILE" \
+            ios/Runner.xcodeproj/project.pbxproj \
+            || true
+
+
+      # ============================================================
+      # 8. CREATE EXPORTOPTIONS.PLIST
+      # ============================================================
+      #
+      # IMPORTANT:
+      # We initially let Xcode use the installed App Store
+      # provisioning profile.
+      #
+      # The diagnostic information above will tell us the exact
+      # profile name and Bundle ID.
+      #
+      # ============================================================
 
       - name: Create ExportOptions.plist
         run: |
-          cat <<EOF > ExportOptions.plist
+
+          cat > ExportOptions.plist <<'EOF'
+
           <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+          "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+
           <plist version="1.0">
+
           <dict>
+
               <key>method</key>
               <string>app-store</string>
+
               <key>signingStyle</key>
               <string>manual</string>
+
               <key>teamID</key>
               <string>3C9698764Z</string>
+
               <key>destination</key>
               <string>export</string>
+
               <key>uploadBitcode</key>
               <false/>
+
               <key>compileBitcode</key>
               <false/>
+
           </dict>
+
           </plist>
+
           EOF
 
-      - name: Build IPA (signed)
-        run: flutter build ipa --release --export-options-plist=ExportOptions.plist
 
+          echo "=========================================="
+          echo "EXPORTOPTIONS.PLIST"
+          echo "=========================================="
+
+
+          cat ExportOptions.plist
+
+
+      # ============================================================
+      # 9. BUILD IOS IPA
+      # ============================================================
+      - name: Build IPA
+        run: |
+
+          echo "=========================================="
+          echo "BUILDING IOS IPA"
+          echo "=========================================="
+
+
+          flutter clean
+
+          flutter pub get
+
+          flutter build ipa \
+            --release \
+            --export-options-plist=ExportOptions.plist
+
+
+      # ============================================================
+      # 10. CHECK GENERATED IPA
+      # ============================================================
+      - name: Check IPA
+        run: |
+
+          echo "=========================================="
+          echo "GENERATED IPA FILES"
+          echo "=========================================="
+
+
+          ls -lah build/ios/ipa/
+
+
+      # ============================================================
+      # 11. INSTALL APP STORE CONNECT CLI
+      # ============================================================
       - name: Install App Store Connect CLI
         run: |
+
           brew install app-store-connect
 
+
+      # ============================================================
+      # 12. UPLOAD TO TESTFLIGHT
+      # ============================================================
       - name: Upload to TestFlight
         env:
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+
         run: |
+
+          echo "=========================================="
+          echo "UPLOADING TO TESTFLIGHT"
+          echo "=========================================="
+
+
           echo "$APP_STORE_CONNECT_PRIVATE_KEY" > private_key.p8
+
 
           app-store-connect upload \
             --apiKeyId "$APP_STORE_CONNECT_KEY_ID" \
@@ -90,8 +396,13 @@ jobs:
             --privateKeyPath private_key.p8 \
             --file build/ios/ipa/*.ipa
 
+
+      # ============================================================
+      # 13. SAVE IPA AS GITHUB ARTIFACT
+      # ============================================================
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
+
         with:
           name: release-ipa
           path: build/ios/ipa/*.ipa
