@@ -59,6 +59,12 @@ jobs:
               <string>manual</string>
               <key>teamID</key>
               <string>3C9698764Z</string>
+              <key>destination</key>
+              <string>export</string>
+              <key>uploadBitcode</key>
+              <false/>
+              <key>compileBitcode</key>
+              <false/>
           </dict>
           </plist>
           EOF
@@ -67,19 +73,12 @@ jobs:
         run: flutter build ipa --release --export-options-plist=ExportOptions.plist
 
       - name: Upload to TestFlight
-        env:
-          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-        run: |
-          mkdir -p ~/.appstoreconnect/private_keys
-          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8
-          
-          xcrun altool --upload-app \
-            --type ios \
-            --file build/ios/ipa/*.ipa \
-            --apiKey "$APP_STORE_CONNECT_KEY_ID" \
-            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+        uses: apple-actions/app-store-connect-upload@v1
+        with:
+          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          api-private-key: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          app-path: build/ios/ipa/*.ipa
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
