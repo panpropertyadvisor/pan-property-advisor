@@ -19,7 +19,7 @@
 	<key>provisioningProfiles</key>
 	<dict>
 		<key>com.panpropertyadvisor.app</key>
-		<string>PAN Property Advisor App Store</string>
+		<string>AppStore_Profile</string>
 	</dict>
 </dict>
 </plist>
