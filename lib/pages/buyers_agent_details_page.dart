@@ -604,7 +604,7 @@ class _BuyersAgentDetailsPageState extends State<BuyersAgentDetailsPage> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: DropdownButtonFormField<String>(
-        value: selected,
+        initialValue: selected,
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
