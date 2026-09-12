@@ -50,6 +50,9 @@ jobs:
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/
 
+      - name: Disable Swift Package Manager
+        run: flutter config --no-enable-swift-package-manager
+        
       - name: Build IPA
         run: |
           flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
