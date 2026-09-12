@@ -24,6 +24,13 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+
+	<key>NSCameraUsageDescription</key>
+	<string>PAN Property Advisor may access your camera so you can take photos for property-related information you choose to provide.</string>
+
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>PAN Property Advisor may access your photo library so you can select images for property-related information you choose to provide.</string>
+
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>
