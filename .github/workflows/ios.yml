@@ -58,7 +58,10 @@ jobs:
         run: |
           flutter clean
           flutter pub get
-          flutter build ipa --release --build-number=${{ github.run_number }}
+          flutter build ipa --release \
+            --build-number=${{ github.run_number }} \
+            --export-options-plist=ios/ExportOptions.plist \
+            --verbose
 
       - name: Upload to TestFlight
         env:
